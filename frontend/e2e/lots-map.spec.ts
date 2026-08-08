@@ -10,6 +10,7 @@ import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './he
  */
 
 const E2E_SHEET_ID = 'e2e-sheet';
+const E2E_ORTHO_ID = 'e2e-ortho';
 
 const LOT_GEOMETRY = {
   id: 'e2e-geom',
@@ -138,6 +139,26 @@ async function mockMapApi(page: Page) {
         });
       case url.pathname === `/api/projects/${E2E_PROJECT_ID}/plan-sheets`:
         return json({ planSheets: [PLAN_SHEET] });
+      case url.pathname === `/api/projects/${E2E_PROJECT_ID}/orthos`:
+        return json({
+          orthos: [
+            {
+              id: E2E_ORTHO_ID,
+              name: 'August drone flight',
+              capturedAt: '2026-08-01T00:00:00.000Z',
+              status: 'ready',
+              boundsWgs84: [150.999, -33.803, 151.003, -33.799],
+              minZoom: 16,
+              maxZoom: 22,
+              tileCount: 42,
+              tileUrlTemplate: `/api/projects/${E2E_PROJECT_ID}/orthos/${E2E_ORTHO_ID}/tiles/{z}/{x}/{y}.png?token=e2e`,
+              diagnostics: null,
+              lastFailureReason: null,
+            },
+          ],
+        });
+      case url.pathname.startsWith(`/api/projects/${E2E_PROJECT_ID}/orthos/${E2E_ORTHO_ID}/tiles/`):
+        return route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PX_PNG });
       // CreateLotModal mounts with the register and needs typed shapes even
       // though these tests never open it.
       case url.pathname === '/api/itp/templates':
@@ -179,6 +200,15 @@ test.describe('Spatial workspace (lot map view)', () => {
     await expect(page.locator('path.leaflet-interactive')).toHaveCount(1);
     await expect(page.locator('.civos-lot-label-text')).toHaveText(/LOT-001/);
     await expect(page.locator('.civos-lot-label-detail')).toHaveText(/Ch 100–200/);
+
+    // Ready orthophotos are bounded toggles, use signed tile URLs, and expose
+    // their own opacity control without leaving the Layers menu.
+    await page.getByTestId('layers-button').click();
+    await page.getByTestId(`map-ortho-${E2E_ORTHO_ID}`).click();
+    await expect(page.getByTestId(`map-ortho-opacity-${E2E_ORTHO_ID}`)).toBeVisible();
+    await expect(
+      page.locator(`img.leaflet-tile[src*="/orthos/${E2E_ORTHO_ID}/tiles/"]`).first(),
+    ).toBeVisible();
 
     // Compact legend: one in-progress lot as a count, labels only on expand.
     const legend = page.getByTestId('map-legend');

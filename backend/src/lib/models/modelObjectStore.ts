@@ -107,6 +107,20 @@ function assertObjectRef(ref: string): void {
   }
 }
 
+function isS3NotFound(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as {
+    name?: unknown;
+    Code?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  return (
+    candidate.name === 'NoSuchKey' ||
+    candidate.Code === 'NoSuchKey' ||
+    candidate.$metadata?.httpStatusCode === 404
+  );
+}
+
 class S3ModelObjectStore implements ModelObjectStore {
   readonly kind = 's3' as const;
 
@@ -138,11 +152,16 @@ class S3ModelObjectStore implements ModelObjectStore {
 
   async readStream(ref: string): Promise<Readable> {
     assertObjectRef(ref);
-    const response = await this.client.send(
-      new GetObjectCommand({ Bucket: this.bucket, Key: ref }),
-    );
-    if (!response.Body) throw AppError.notFound('Design model object');
-    return response.Body as Readable;
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: ref }),
+      );
+      if (!response.Body) throw AppError.notFound('Stored model or ortho object');
+      return response.Body as Readable;
+    } catch (error) {
+      if (isS3NotFound(error)) throw AppError.notFound('Stored model or ortho object');
+      throw error;
+    }
   }
 
   async delete(ref: string): Promise<void> {
@@ -155,24 +174,28 @@ class S3ModelObjectStore implements ModelObjectStore {
       const batch = refs.slice(index, index + 1000);
       for (const ref of batch) assertObjectRef(ref);
       if (batch.length === 0) continue;
-      await this.client.send(
+      const result = await this.client.send(
         new DeleteObjectsCommand({
           Bucket: this.bucket,
           Delete: { Objects: batch.map((Key) => ({ Key })) },
         }),
       );
+      if (result.Errors?.length) {
+        throw new Error(`Object storage failed to delete ${result.Errors.length} object(s)`);
+      }
     }
   }
 
   async list(prefix: string): Promise<string[]> {
     assertObjectRef(prefix);
+    const descendantPrefix = `${prefix}/`;
     const refs: string[] = [];
     let continuationToken: string | undefined;
     do {
       const page = await this.client.send(
         new ListObjectsV2Command({
           Bucket: this.bucket,
-          Prefix: prefix,
+          Prefix: descendantPrefix,
           ContinuationToken: continuationToken,
         }),
       );

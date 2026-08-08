@@ -166,10 +166,49 @@ describe('orthophoto routes', () => {
     const list = await request(app).get(`/api/projects/${projectId}/orthos`).set(auth());
     const template = list.body.orthos[0].tileUrlTemplate as string;
     const tileUrl = template.replace('{z}', '16').replace('{x}', '1').replace('{y}', '2');
+    await request(app)
+      .get(`/api/projects/${projectId}/orthos/${orthoId}/tiles/16/1/2.png`)
+      .expect(401);
     const tile = await request(app).get(tileUrl);
     expect(tile.status).toBe(200);
     expect(tile.headers['cache-control']).toBe('private, max-age=86400, immutable');
     expect(tile.headers.etag).toBeTruthy();
+    await request(app).get(tileUrl.replace('/16/', '/15/')).expect(404);
+    await request(app)
+      .get(`/api/projects/${projectId}/orthos/${orthoId}/tiles/not-a-zoom/1/2.png`)
+      .expect(400);
+  });
+
+  it('deletes the source, tile tree and database row for an idle layer', async () => {
+    const { orthoId } = await createUploadingOrtho();
+    const store = createLocalModelObjectStore();
+    const root = orthoTileStorageRoot(projectId, orthoId);
+    const scratch = getUploadSubdirectoryPath('ortho-route-delete-fixtures');
+    await fs.promises.mkdir(scratch, { recursive: true });
+    const objectPath = path.join(scratch, 'object');
+    await fs.promises.writeFile(objectPath, 'data');
+    await store.writeFromFile(objectPath, orthoSourceObjectRef(projectId, orthoId));
+    await store.writeFromFile(objectPath, orthoTileObjectRef(root, 16, 1, 2), 'image/png');
+    await prisma.orthoLayer.update({
+      where: { id: orthoId },
+      data: {
+        status: 'ready',
+        sourceStorageRef: orthoSourceObjectRef(projectId, orthoId),
+        tileStorageRoot: root,
+        boundsWgs84: [150, -34, 150.1, -33.9],
+        minZoom: 16,
+        maxZoom: 22,
+        tileCount: 1,
+      },
+    });
+
+    await request(app)
+      .delete(`/api/projects/${projectId}/orthos/${orthoId}`)
+      .set(auth())
+      .expect(204);
+
+    expect(await prisma.orthoLayer.findUnique({ where: { id: orthoId } })).toBeNull();
+    expect(await store.list(`ortho/${projectId}/${orthoId}`)).toEqual([]);
   });
 
   it('returns 409 while tiling and forbids subcontractor reads', async () => {

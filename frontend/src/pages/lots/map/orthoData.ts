@@ -59,10 +59,8 @@ export function useOrthoLayers(projectId: string | undefined) {
     },
     enabled: Boolean(projectId),
     staleTime: 30_000,
-    refetchInterval: (query) =>
-      (query.state.data as OrthoLayerListItem[] | undefined)?.some((ortho) =>
-        ['uploading', 'queued', 'tiling'].includes(ortho.status),
-      )
+    refetchInterval: (orthos) =>
+      orthos?.some((ortho) => ['uploading', 'queued', 'tiling'].includes(ortho.status))
         ? 10_000
         : false,
   });

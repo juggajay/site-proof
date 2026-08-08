@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { BottomSheet } from '@/components/foreman/sheets/BottomSheet';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 
 import type {
   MapBasemapId,
@@ -234,7 +234,7 @@ export function MapLayersMenu({
                   <span className="min-w-0 flex-1 truncate">{row.label}</span>
                   {row.capturedAt && (
                     <span className="ml-2 text-xs text-muted-foreground">
-                      {new Date(row.capturedAt).toLocaleDateString()}
+                      {formatDate(row.capturedAt)}
                     </span>
                   )}
                 </DropdownMenuCheckboxItem>
@@ -430,9 +430,7 @@ function SheetOrthoRow({
         <Satellite className="h-5 w-5 flex-none text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-[15px]">{row.label}</span>
         {row.capturedAt && (
-          <span className="text-xs text-muted-foreground">
-            {new Date(row.capturedAt).toLocaleDateString()}
-          </span>
+          <span className="text-xs text-muted-foreground">{formatDate(row.capturedAt)}</span>
         )}
       </button>
       {row.checked && (

@@ -1158,7 +1158,7 @@ export function LotMapView({
     ? formatDateKey(new Date(timelineQuery.data.earliest))
     : null;
 
-  const bounds = useMemo(() => {
+  const bounds = useMemo<L.LatLngBoundsExpression | null>(() => {
     const fromShapes = computeBounds([
       ...filteredGeometries.map((g) => g.geometryWgs84),
       ...controlLines.map((c) => c.geometryWgs84),
