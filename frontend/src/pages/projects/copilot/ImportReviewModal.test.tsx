@@ -303,6 +303,52 @@ describe('ImportReviewModal', () => {
     );
   });
 
+  it('bulk-learns one activity pick across every row that failed on the same raw value', () => {
+    const sameDetail = '"Earthworks (general)" is not an activity SiteProof recognises.';
+    const row = (key: string, label: string, detail: string) => ({
+      key,
+      unit: 'lot' as const,
+      rowRef: { sheet: 'Lots', rowIndex: 2 },
+      label,
+      outcome: 'blocked' as const,
+      reason: 'unresolvable_activity' as const,
+      detail,
+    });
+    const blocked = dryRun({
+      counts: {
+        willCreate: 0,
+        willUpdate: 0,
+        willSkip: 0,
+        needsReview: 0,
+        ambiguous: 0,
+        blocked: 3,
+        willImport: 0,
+      },
+      canApply: false,
+      rows: [
+        row('L1::L1', 'EW-001', sameDetail),
+        row('L2::L2', 'EW-002', sameDetail),
+        // Different raw value — must NOT learn from the pick below.
+        row('L3::L3', 'KB-001', '"Kerbs" is not an activity SiteProof recognises.'),
+      ],
+    });
+    state.detail = detailFor(blocked);
+    renderModal();
+
+    fireEvent.change(screen.getByLabelText('Activity for EW-001'), {
+      target: { value: 'earthworks_general' },
+    });
+
+    expect(state.dryRunSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resolutions: {
+          'L1::L1': { activitySlug: 'earthworks_general' },
+          'L2::L2': { activitySlug: 'earthworks_general' },
+        },
+      }),
+    );
+  });
+
   // B2/PDF: a PDF has no printed column headers — the reader emits the import
   // targets as its columns, so the batch's mapping is the map stored with its
   // dry run, never a spreadsheet profile whose columns are not in the file.

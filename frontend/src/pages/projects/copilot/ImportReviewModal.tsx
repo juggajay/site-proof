@@ -204,6 +204,25 @@ export function ImportReviewModal({
 
   const handleResolve = (key: string, patch: Resolutions[string]) => {
     const next = { ...resolutions, [key]: { ...resolutions[key], ...patch } };
+    // Bulk-learn: one activity pick teaches every row that failed on the SAME
+    // raw value (the server's detail line quotes it, so equal detail = equal
+    // raw). Rows with NO activity keep per-row picks — different lots on one
+    // register can genuinely be different activities.
+    if (patch.activitySlug !== undefined) {
+      const rows = effectiveDryRun?.rows ?? [];
+      const source = rows.find((row) => row.key === key);
+      if (source?.reason === 'unresolvable_activity' && source.detail?.startsWith('"')) {
+        for (const row of rows) {
+          if (
+            row.key !== key &&
+            row.reason === 'unresolvable_activity' &&
+            row.detail === source.detail
+          ) {
+            next[row.key] = { ...next[row.key], activitySlug: patch.activitySlug };
+          }
+        }
+      }
+    }
     setResolutions(next);
     if (batchId) void runDryRun(batchId, next);
   };
