@@ -68,6 +68,13 @@ function mockDashboardApi({ stats = ZERO_STATS, projects = [] }: MockApiOptions 
       return Promise.resolve({ invitation: null });
     }
     if (path === '/api/dashboard/foreman') return Promise.resolve(NO_PROJECT_FOREMAN_DATA);
+    // Best-effort PDF-branding + export-chrome lookups fire on render; their
+    // late rejections log after the test body and race vitest's worker
+    // teardown ("Closing rpc while onUserConsoleLog was pending") in CI.
+    if (/\/api\/projects\/[^/]+\/(branding|variations|claim-readiness\/summary)$/.test(path)) {
+      return Promise.resolve({});
+    }
+    if (/^\/api\/projects\/[^/]+$/.test(path)) return Promise.resolve({});
     return Promise.reject(new Error(`Unhandled apiFetch path in test: ${path}`));
   });
 }
