@@ -544,6 +544,11 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
+    if (pathProject(path, '/api/projects/', '/orthos') === PROJECT_ID) {
+      await fulfillJson(route, { orthos: [] });
+      return;
+    }
+
     if (pathProject(path, '/api/projects/', '/plan-sheets') === PROJECT_ID) {
       await fulfillJson(route, { planSheets: [] });
       return;
